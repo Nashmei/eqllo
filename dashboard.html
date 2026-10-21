@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XAUUSD · NVIDIA AI Monitor</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#121a2c;--line:#26334b;--muted:#91a0b8;--text:#edf2fa;--green:#38d996;--red:#ff647c;--amber:#f4c15d;--blue:#72a7ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif}
+main{max-width:1250px;margin:auto;padding:28px 18px}header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+h1{font-size:24px;margin:0}p{color:var(--muted);margin:5px 0 0}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 11px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.label{color:var(--muted);font-size:12px}.value{font-size:23px;font-weight:700;margin-top:5px;overflow-wrap:anywhere}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0;flex-wrap:wrap}button{background:#233654;color:white;border:1px solid #3a5278;padding:9px 13px;border-radius:9px;cursor:pointer}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:14px}table{border-collapse:collapse;width:100%;min-width:900px;background:var(--panel)}th,td{text-align:left;padding:12px 13px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--muted);font-weight:600}tr:last-child td{border-bottom:0}.decision{font-weight:700}.APPROVE{color:var(--green)}.REJECT{color:var(--red)}.WAIT,.queued{color:var(--amber)}.error{color:var(--red)}.muted{color:var(--muted)}.reason{max-width:350px;white-space:normal}.small{font-size:12px;color:var(--muted)}.empty{text-align:center;padding:38px;color:var(--muted)}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:18px 10px}h1{font-size:20px}}
+</style>
+</head>
+<body><main>
+<header><div><h1>XAUUSD · NVIDIA AI Monitor</h1><p>Candidate signals for M1/M5 · Analysis only, no automatic trading</p></div><div class="pill" id="health">Connecting…</div></header>
+<section class="grid">
+<div class="card"><div class="label">Signals shown</div><div class="value" id="total">—</div></div>
+<div class="card"><div class="label">AI approved</div><div class="value" id="approved">—</div></div>
+<div class="card"><div class="label">Rejected</div><div class="value" id="rejected">—</div></div>
+<div class="card"><div class="label">Queued / errors</div><div class="value" id="pending">—</div></div>
+</section>
+<div class="toolbar"><div><strong>Recent signals</strong><div class="small" id="updated">Waiting for data…</div></div><button id="refresh">Refresh now</button></div>
+<div class="tablewrap"><table><thead><tr><th>Received (UTC)</th><th>Symbol / TF</th><th>Setup</th><th>Price</th><th>AI decision</th><th>Score</th><th>Rationale / flags</th></tr></thead><tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div>
+<p class="small" style="margin-top:14px">AI confidence is a model score, not a calibrated probability of profit. Verify signals and risk independently.</p>
+</main>
+<script>
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function refresh(){
+ try{
+  const [h,s]=await Promise.all([fetch('/api/health').then(r=>r.json()),fetch('/api/signals?limit=100').then(r=>r.json())]);
+  document.getElementById('health').textContent=(h.nvidia_key_configured?'NVIDIA key set':'NVIDIA key missing')+' · '+h.model;
+  const items=s.signals||[];
+  document.getElementById('total').textContent=items.length;
+  document.getElementById('approved').textContent=items.filter(x=>x.decision==='APPROVE').length;
+  document.getElementById('rejected').textContent=items.filter(x=>x.decision==='REJECT').length;
+  document.getElementById('pending').textContent=items.filter(x=>['queued','error'].includes(x.status)).length;
+  document.getElementById('updated').textContent='Updated '+new Date().toLocaleTimeString();
+  const rows=document.getElementById('rows');
+  if(!items.length){rows.innerHTML='<tr><td colspan="7" class="empty">No signals yet. Configure TradingView webhook to begin.</td></tr>';return}
+  rows.innerHTML=items.map(x=>{
+   const flags=Array.isArray(x.risk_flags)?x.risk_flags.join(' · '):'';
+   const price=x.price==null?'—':Number(x.price).toFixed(2);
+   return '<tr><td>'+esc((x.received_at||'').replace('T',' ').slice(0,19))+'</td><td>'+esc(x.symbol)+'<br><span class="small">M'+esc(x.timeframe)+'</span></td><td>'+esc(x.setup)+'</td><td>'+esc(price)+'</td><td class="decision '+esc(x.decision||x.status)+'">'+esc(x.decision||x.status||'—')+'</td><td>'+esc(x.confidence==null?'—':x.confidence+'/100')+'</td><td class="reason">'+esc(x.rationale||x.error||'Awaiting analysis')+(flags?'<div class="small">'+esc(flags)+'</div>':'')+'</td></tr>';
+  }).join('');
+ }catch(e){document.getElementById('health').textContent='API unavailable';document.getElementById('updated').textContent=String(e)}
+}
+document.getElementById('refresh').addEventListener('click',refresh);refresh();setInterval(refresh,5000);
+</script></body></html>
