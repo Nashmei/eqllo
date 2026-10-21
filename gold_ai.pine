@@ -1,6 +1,6 @@
+//@version=6
 // This is a starter candidate detector, not a validated profitable strategy.
 // AI decisions are displayed in the external dashboard; Pine cannot receive webhook responses.
- //@version=6
 indicator("XAUUSD NVIDIA AI Candidate Filter [M1/M5]", overlay=true, max_labels_count=200)
 
 fastLen = input.int(9, "Fast EMA", minval=2)
@@ -9,7 +9,6 @@ pivotLen = input.int(5, "Local liquidity lookback", minval=2)
 atrLen = input.int(14, "ATR length", minval=2)
 stopAtr = input.float(1.2, "Stop distance (ATR)", minval=0.2, step=0.1)
 rr = input.float(2.0, "Target R multiple", minval=0.5, step=0.25)
-webhookToken = input.string("REPLACE_WITH_WEBHOOK_TOKEN", "Webhook token (URL secret is recommended)")
 sendAlerts = input.bool(true, "Enable alert() payloads")
 
 emaFast = ta.ema(close, fastLen)
