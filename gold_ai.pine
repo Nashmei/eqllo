@@ -1,0 +1,50 @@
+// This is a starter candidate detector, not a validated profitable strategy.
+// AI decisions are displayed in the external dashboard; Pine cannot receive webhook responses.
+ //@version=6
+indicator("XAUUSD NVIDIA AI Candidate Filter [M1/M5]", overlay=true, max_labels_count=200)
+
+fastLen = input.int(9, "Fast EMA", minval=2)
+slowLen = input.int(21, "Slow EMA", minval=3)
+pivotLen = input.int(5, "Local liquidity lookback", minval=2)
+atrLen = input.int(14, "ATR length", minval=2)
+stopAtr = input.float(1.2, "Stop distance (ATR)", minval=0.2, step=0.1)
+rr = input.float(2.0, "Target R multiple", minval=0.5, step=0.25)
+webhookToken = input.string("REPLACE_WITH_WEBHOOK_TOKEN", "Webhook token (URL secret is recommended)")
+sendAlerts = input.bool(true, "Enable alert() payloads")
+
+emaFast = ta.ema(close, fastLen)
+emaSlow = ta.ema(close, slowLen)
+atr = ta.atr(atrLen)
+trendUpM5 = request.security(syminfo.tickerid, "5", ta.ema(close, fastLen) > ta.ema(close, slowLen), barmerge.gaps_off, barmerge.lookahead_off)
+trendDownM5 = request.security(syminfo.tickerid, "5", ta.ema(close, fastLen) < ta.ema(close, slowLen), barmerge.gaps_off, barmerge.lookahead_off)
+
+priorLow = ta.lowest(low[1], pivotLen)
+priorHigh = ta.highest(high[1], pivotLen)
+bullSweep = low < priorLow and close > priorLow and close > open
+bearSweep = high > priorHigh and close < priorHigh and close < open
+bullSetup = bullSweep and close > emaFast and trendUpM5
+bearSetup = bearSweep and close < emaFast and trendDownM5
+
+plot(emaFast, "Fast EMA", color=color.new(color.teal, 20))
+plot(emaSlow, "Slow EMA", color=color.new(color.orange, 20))
+plotshape(bullSetup, title="BUY candidate", style=shape.labelup, text="BUY?", color=color.new(color.green, 0), textcolor=color.white, location=location.belowbar, size=size.tiny)
+plotshape(bearSetup, title="SELL candidate", style=shape.labeldown, text="SELL?", color=color.new(color.red, 0), textcolor=color.white, location=location.abovebar, size=size.tiny)
+
+if sendAlerts and bullSetup and barstate.isconfirmed
+    entry = close
+    sl = math.min(low, entry - atr * stopAtr)
+    tp = entry + (entry - sl) * rr
+    id = syminfo.ticker + "-" + timeframe.period + "-" + str.tostring(time) + "-BUY"
+    payload = '{"signal_id":"' + id + '","symbol":"XAUUSD","timeframe":"' + timeframe.period + '","setup":"bullish_sweep_choch","price":' + str.tostring(close) + ',"atr":' + str.tostring(atr) + ',"trend_m5":"bullish","entry_candidate":' + str.tostring(entry) + ',"stop_loss":' + str.tostring(sl) + ',"target_price":' + str.tostring(tp) + ',"risk_reward_target":' + str.tostring(rr) + ',"bar_time":"' + str.tostring(time) + '"}'
+    alert(payload, alert.freq_once_per_bar_close)
+
+if sendAlerts and bearSetup and barstate.isconfirmed
+    entry = close
+    sl = math.max(high, entry + atr * stopAtr)
+    tp = entry - (sl - entry) * rr
+    id = syminfo.ticker + "-" + timeframe.period + "-" + str.tostring(time) + "-SELL"
+    payload = '{"signal_id":"' + id + '","symbol":"XAUUSD","timeframe":"' + timeframe.period + '","setup":"bearish_sweep_choch","price":' + str.tostring(close) + ',"atr":' + str.tostring(atr) + ',"trend_m5":"bearish","entry_candidate":' + str.tostring(entry) + ',"stop_loss":' + str.tostring(sl) + ',"target_price":' + str.tostring(tp) + ',"risk_reward_target":' + str.tostring(rr) + ',"bar_time":"' + str.tostring(time) + '"}'
+    alert(payload, alert.freq_once_per_bar_close)
+
+alertcondition(bullSetup, title="BUY candidate", message="XAUUSD BUY candidate. Configure Any alert() function call for JSON webhook.")
+alertcondition(bearSetup, title="SELL candidate", message="XAUUSD SELL candidate. Configure Any alert() function call for JSON webhook.")
